@@ -320,14 +320,28 @@ public class SimulationController {
     private Sphere createSun3D(double tamaño) {
         Sphere sol = new Sphere(tamaño * zoomFactor);
 
-        // Material más brillante para el sol
+        // Material con efecto semitransparente y emisión de luz para simular una estrella
         PhongMaterial material = new PhongMaterial();
-        material.setDiffuseColor(javafx.scene.paint.Color.rgb(255, 255, 0)); // Amarillo brillante
-        material.setSpecularColor(javafx.scene.paint.Color.rgb(255, 255, 200)); // Brillo
-        material.setSpecularPower(5.0); // Más brillante
-
+        
+        // Color amarillo brillante con opacidad reducida (0.7) para efecto de resplandor
+        material.setDiffuseColor(javafx.scene.paint.Color.rgb(255, 255, 0, 0.7));
+        
+        // Color blanco para el brillo especular que simula la corona solar
+        material.setSpecularColor(javafx.scene.paint.Color.rgb(255, 255, 255, 0.9));
+        
+        // Reducir el poder especular para que el brillo se extienda más
+        material.setSpecularPower(2.0);
+        
+        // Aplicar el material a la esfera solar
         sol.setMaterial(material);
+        
+        // Usar modo de renderizado lleno
         sol.setDrawMode(DrawMode.FILL);
+        
+        // Aplicar un ligero desenfoque mediante escala para simular el aura solar
+        sol.setScaleX(1.05);
+        sol.setScaleY(1.05);
+        sol.setScaleZ(1.05);
 
         return sol;
     }
