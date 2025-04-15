@@ -15,8 +15,18 @@ public class Main extends Application {
      * @param args Argumentos de línea de comandos (no utilizados)
      */
     public static void main(String[] args) {
-        // Iniciar la aplicación JavaFX
-        launch(args);
+        // JavaFX se maneja ahora a través de los argumentos de la máquina virtual
+        // No intentamos configurar manualmente las propiedades del sistema
+        // Lo que puede causar problemas con la inicialización
+        
+        try {
+            // Iniciar la aplicación JavaFX sin manipular propiedades del sistema
+            launch(args);
+        } catch (Exception e) {
+            System.err.println("ERROR: No se pudo iniciar la aplicación JavaFX.");
+            System.err.println("Por favor, ejecute con: --module-path \"RUTA_A_JAVAFX_LIB\" --add-modules javafx.controls,javafx.fxml");
+            e.printStackTrace();
+        }
     }
     
     /**

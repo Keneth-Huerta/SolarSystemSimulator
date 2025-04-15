@@ -121,8 +121,9 @@ public class Planet extends CelestialBody {
         position[2] = orbitalRadius * Math.sin(getCurrentAngle());
         setPosition(position);
         
-        // Debug
+    /*     // Debug
         System.out.println("Actualizando: " + getName() + ", Ángulo: " + getCurrentAngle() + 
                            ", Pos X: " + position[0] + ", Pos Z: " + position[2]);
+    */
     }
 }

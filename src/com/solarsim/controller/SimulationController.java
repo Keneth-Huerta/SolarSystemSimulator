@@ -1,22 +1,28 @@
 package com.solarsim.controller;
 
+import com.solarsim.model.CelestialBody;
 import com.solarsim.model.Moon;
 import com.solarsim.model.Planet;
 import com.solarsim.model.SolarSystem;
 import com.solarsim.model.Star;
 import com.solarsim.view.JavaFX3DSimulationView;
+import com.solarsim.view.components.CelestialBodyInfoPanel;
 
 import java.awt.Color;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import javafx.application.Platform;
 import javafx.scene.Group;
 import javafx.scene.AmbientLight;
+import javafx.scene.Node;
 import javafx.scene.PointLight;
 import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Sphere;
 import javafx.scene.transform.Rotate;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.shape.Box;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.DrawMode;
@@ -28,10 +34,12 @@ import javafx.stage.Stage;
  * Implementa el patrón MVC (Modelo-Vista-Controlador) con JavaFX 3D.
  */
 public class SimulationController {
-    private SolarSystem solarSystem;
     private JavaFX3DSimulationView simulationView;
     private Timer simulationTimer;
     private boolean isSimulationRunning;
+    
+    // Modelo del sistema solar
+    private SolarSystem solarSystem;
     
     // Objetos 3D
     private Sphere sun3D;
@@ -64,6 +72,12 @@ public class SimulationController {
     
     /** Tamaño visual del sol - reducido para evitar que se sobreponga con Mercurio */
     private static final int BASE_SUN_SIZE = 20; // Reducido para una mejor escala visual
+
+    // Mapa para relacionar objetos 3D con sus correspondientes cuerpos celestes
+    private Map<Sphere, CelestialBody> sphereToCelestialBodyMap = new HashMap<>();
+    
+    // Referencia al cuerpo celeste seleccionado actualmente
+    private CelestialBody selectedCelestialBody;
 
     /**
      * Constructor que inicializa el controlador con una vista.
@@ -102,12 +116,30 @@ public class SimulationController {
         // Limpiar grupo por si acaso
         planetGroup.getChildren().clear();
         
+        // Limpiar mapa de correspondencia
+        sphereToCelestialBodyMap.clear();
+        
+        // Conectar el panel de información con el controlador
+        if (simulationView.getInfoPanel() != null) {
+            simulationView.getInfoPanel().setController(this);
+        }
+        
         // Añadir iluminación ambiental
         AmbientLight ambientLight = new AmbientLight(javafx.scene.paint.Color.rgb(30, 30, 30));
         planetGroup.getChildren().add(ambientLight);
         
         // Crear el Sol en el centro
         sun3D = createSun3D(BASE_SUN_SIZE);
+        
+        // Añadir el Sol al mapa (como primer cuerpo celeste del sistema solar)
+        if (!solarSystem.getCelestialBodies().isEmpty() && 
+            solarSystem.getCelestialBodies().get(0) instanceof Star) {
+            sphereToCelestialBodyMap.put(sun3D, solarSystem.getCelestialBodies().get(0));
+            
+            // Configurar evento de click para el Sol
+            configureCelestialBodySelection(sun3D);
+        }
+        
         planetGroup.getChildren().add(sun3D);
         
         // Añadir luz puntual en el sol
@@ -145,6 +177,13 @@ public class SimulationController {
                 // Añadir planeta como esfera 3D
                 Sphere planeta3D = createPlanet3D(planeta);
                 planets3D[planetIndex++] = planeta3D;
+                
+                // Agregar al mapa para selección
+                sphereToCelestialBodyMap.put(planeta3D, planeta);
+                
+                // Configurar evento de click
+                configureCelestialBodySelection(planeta3D);
+                
                 planetGroup.getChildren().add(planeta3D);
                 
                 // Añadir etiqueta con el nombre
@@ -169,6 +208,13 @@ public class SimulationController {
                 // Añadir luna como esfera 3D
                 Sphere luna3D = createMoon3D(luna);
                 moons3D[moonIndex++] = luna3D;
+                
+                // Agregar al mapa para selección
+                sphereToCelestialBodyMap.put(luna3D, luna);
+                
+                // Configurar evento de click
+                configureCelestialBodySelection(luna3D);
+                
                 planetGroup.getChildren().add(luna3D);
                 
                 // Añadir etiqueta con el nombre
@@ -344,6 +390,175 @@ public class SimulationController {
         sol.setScaleZ(1.05);
 
         return sol;
+    }
+    
+    /**
+     * Configura el manejo de eventos de click para un cuerpo celeste.
+     * @param sphere La esfera 3D que representa al cuerpo celeste
+     */
+    private void configureCelestialBodySelection(Sphere sphere) {
+        // Agregar efecto al pasar el mouse por encima
+        sphere.setOnMouseEntered(event -> {
+            System.out.println("Mouse entró en: " + sphereToCelestialBodyMap.get(sphere).getName());
+            // Guardar el material original para restaurarlo después
+            PhongMaterial originalMaterial = (PhongMaterial) sphere.getMaterial();
+            
+            // Crear un nuevo material con brillo para destacar
+            PhongMaterial highlightMaterial = new PhongMaterial();
+            highlightMaterial.setDiffuseColor(originalMaterial.getDiffuseColor().brighter());
+            highlightMaterial.setSpecularColor(javafx.scene.paint.Color.WHITE);
+            highlightMaterial.setSpecularPower(20.0);
+            
+            // Aplicar el material de resaltado
+            sphere.setMaterial(highlightMaterial);
+        });
+        
+        // Restaurar la apariencia original al quitar el mouse
+        sphere.setOnMouseExited(event -> {
+            System.out.println("Mouse salió de: " + sphereToCelestialBodyMap.get(sphere).getName());
+            CelestialBody body = sphereToCelestialBodyMap.get(sphere);
+            
+            // Si este cuerpo es el seleccionado, mantenerlo resaltado
+            if (body != selectedCelestialBody) {
+                // Restaurar material original según tipo de cuerpo celeste
+                resetSphereAppearance(sphere, body);
+            }
+        });
+        
+        // Manejar el evento de click
+        sphere.setOnMouseClicked(event -> {
+            System.out.println("Click en: " + sphereToCelestialBodyMap.get(sphere).getName());
+            CelestialBody selectedBody = sphereToCelestialBodyMap.get(sphere);
+            selectCelestialBody(selectedBody, sphere);
+            event.consume(); // Evitar que el click se propague a otros elementos
+        });
+    }
+    
+    /**
+     * Restaura la apariencia original de una esfera 3D.
+     * @param sphere La esfera 3D
+     * @param body El cuerpo celeste correspondiente
+     */
+    private void resetSphereAppearance(Sphere sphere, CelestialBody body) {
+        if (body instanceof Planet) {
+            Planet planet = (Planet) body;
+            
+            // Convertir java.awt.Color a javafx.scene.paint.Color
+            java.awt.Color awtColor = planet.getColor();
+            javafx.scene.paint.Color fxColor = javafx.scene.paint.Color.rgb(
+                awtColor.getRed(),
+                awtColor.getGreen(),
+                awtColor.getBlue(),
+                awtColor.getAlpha() / 255.0
+            );
+            
+            // Crear material con iluminación para efecto 3D
+            PhongMaterial material = new PhongMaterial();
+            material.setDiffuseColor(fxColor);
+            material.setSpecularColor(javafx.scene.paint.Color.WHITE);
+            sphere.setMaterial(material);
+        } else if (body instanceof Moon) {
+            Moon moon = (Moon) body;
+            
+            // Convertir java.awt.Color a javafx.scene.paint.Color
+            java.awt.Color awtColor = moon.getColor();
+            javafx.scene.paint.Color fxColor = javafx.scene.paint.Color.rgb(
+                awtColor.getRed(),
+                awtColor.getGreen(),
+                awtColor.getBlue(),
+                awtColor.getAlpha() / 255.0
+            );
+            
+            // Crear material
+            PhongMaterial material = new PhongMaterial();
+            material.setDiffuseColor(fxColor);
+            material.setSpecularColor(javafx.scene.paint.Color.WHITE);
+            material.setSpecularPower(10.0);
+            sphere.setMaterial(material);
+        } else if (body instanceof Star) {
+            // Para el sol, restaurar el material original
+            PhongMaterial material = new PhongMaterial();
+            material.setDiffuseColor(javafx.scene.paint.Color.rgb(255, 255, 0, 0.7));
+            material.setSpecularColor(javafx.scene.paint.Color.rgb(255, 255, 255, 0.9));
+            material.setSpecularPower(2.0);
+            sphere.setMaterial(material);
+        }
+    }
+    
+    /**
+     * Selecciona un cuerpo celeste y actualiza la interfaz.
+     * @param body El cuerpo celeste seleccionado
+     * @param sphere La esfera 3D que representa al cuerpo celeste
+     */
+    private void selectCelestialBody(CelestialBody body, Sphere sphere) {
+        // Deseleccionar el cuerpo anterior si existe
+        if (selectedCelestialBody != null) {
+            // Restaurar la apariencia original
+            for (Sphere s : sphereToCelestialBodyMap.keySet()) {
+                if (sphereToCelestialBodyMap.get(s) == selectedCelestialBody) {
+                    // Restaurar apariencia original de la esfera anterior
+                    resetSphereAppearance(s, selectedCelestialBody);
+                    break;
+                }
+            }
+        }
+        
+        // Establecer el nuevo cuerpo seleccionado
+        selectedCelestialBody = body;
+        
+        // Aplicar efecto destacado a la nueva selección
+        PhongMaterial selectionMaterial = new PhongMaterial();
+        if (body instanceof Star) {
+            selectionMaterial.setDiffuseColor(javafx.scene.paint.Color.rgb(255, 255, 100, 0.9));
+        } else if (body instanceof Planet) {
+            Planet planet = (Planet) body;
+            java.awt.Color awtColor = planet.getColor();
+            javafx.scene.paint.Color fxColor = javafx.scene.paint.Color.rgb(
+                awtColor.getRed(),
+                awtColor.getGreen(),
+                awtColor.getBlue(),
+                awtColor.getAlpha() / 255.0
+            ).brighter().brighter();
+            selectionMaterial.setDiffuseColor(fxColor);
+        } else if (body instanceof Moon) {
+            Moon moon = (Moon) body;
+            java.awt.Color awtColor = moon.getColor();
+            javafx.scene.paint.Color fxColor = javafx.scene.paint.Color.rgb(
+                awtColor.getRed(),
+                awtColor.getGreen(),
+                awtColor.getBlue(),
+                awtColor.getAlpha() / 255.0
+            ).brighter().brighter();
+            selectionMaterial.setDiffuseColor(fxColor);
+        }
+        selectionMaterial.setSpecularColor(javafx.scene.paint.Color.WHITE);
+        selectionMaterial.setSpecularPower(40.0);
+        sphere.setMaterial(selectionMaterial);
+        
+        // Actualizar panel de información
+        if (simulationView != null && simulationView.getInfoPanel() != null) {
+            System.out.println("Actualizando panel de información para: " + body.getName());
+            Platform.runLater(() -> {
+                CelestialBodyInfoPanel infoPanel = simulationView.getInfoPanel();
+                infoPanel.updateInfo(selectedCelestialBody);
+                
+                // Forzar la visibilidad del panel después de actualizar la información
+                infoPanel.setVisible(true);
+                infoPanel.setManaged(true); // Importante para que ocupe espacio en el layout
+                
+                // Establecer un ancho mínimo y preferido para garantizar que sea visible
+                infoPanel.setMinWidth(250);
+                infoPanel.setPrefWidth(250);
+                
+                // Asegurar que el panel sea considerado por el layout
+                BorderPane root = (BorderPane) simulationView.getScene().getRoot();
+                if (root.getRight() != infoPanel) {
+                    root.setRight(infoPanel);
+                }
+            });
+        } else {
+            System.out.println("ERROR: No se puede actualizar el panel de información (null)");
+        }
     }
     
     /**
@@ -822,5 +1037,21 @@ public class SimulationController {
                 }
             }
         });
+    }
+
+    /**
+     * Obtiene el factor de zoom actual para que el panel de información pueda usarlo.
+     * @return El factor de escala actualmente aplicado
+     */
+    public double getCurrentScaleFactor() {
+        return SCALE_FACTOR * zoomFactor;
+    }
+    
+    /**
+     * Obtiene el cuerpo celeste seleccionado actualmente.
+     * @return El cuerpo celeste seleccionado o null si no hay ninguno
+     */
+    public CelestialBody getSelectedCelestialBody() {
+        return selectedCelestialBody;
     }
 }

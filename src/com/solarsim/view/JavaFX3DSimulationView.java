@@ -20,6 +20,7 @@ import javafx.scene.transform.Rotate;
 import javafx.stage.Stage;
 
 import com.solarsim.controller.SimulationController;
+import com.solarsim.view.components.CelestialBodyInfoPanel;
 
 /**
  * Clase que implementa la interfaz de usuario 3D del simulador usando JavaFX puro.
@@ -56,6 +57,9 @@ public class JavaFX3DSimulationView {
     
     // Estado de zoom
     private double zoomLevel = 1.0;
+    
+    // Panel de información lateral
+    private CelestialBodyInfoPanel infoPanel;
 
     /**
      * Constructor que recibe el stage principal desde la clase Main.
@@ -65,7 +69,7 @@ public class JavaFX3DSimulationView {
     public JavaFX3DSimulationView(Stage primaryStage) {
         this.stage = primaryStage;
         createUserInterface();
-        adjustLayoutForFullScreenWithControls(); // Ajustar el diseño para pantalla completa con controles
+        adjustLayoutForFullScreenWithControls();
         setupEventHandlers();
         
         // Configurar y mostrar la ventana
@@ -85,8 +89,12 @@ public class JavaFX3DSimulationView {
         borderPane.setTop(toolbar);
         
         // Panel de información a la izquierda
-        VBox infoPanel = createInfoPanel();
-        borderPane.setLeft(infoPanel);
+        VBox leftPanel = createLeftPanel();
+        borderPane.setLeft(leftPanel);
+        
+        // Panel de información lateral para cuerpos celestes (inicialmente oculto)
+        infoPanel = new CelestialBodyInfoPanel();
+        borderPane.setRight(infoPanel);
         
         // Área 3D para la simulación
         createSimulationArea();
@@ -130,12 +138,12 @@ public class JavaFX3DSimulationView {
     }
     
     /**
-     * Crea el panel de información con datos sobre los planetas.
+     * Crea el panel de información con datos e instrucciones.
      */
-    private VBox createInfoPanel() {
-        VBox infoPanel = new VBox(10);
-        infoPanel.setStyle("-fx-padding: 10; -fx-background-color: #222222;");
-        infoPanel.setPrefWidth(200);
+    private VBox createLeftPanel() {
+        VBox leftPanel = new VBox(10);
+        leftPanel.setStyle("-fx-padding: 10; -fx-background-color: #222222;");
+        leftPanel.setPrefWidth(200);
         
         Label infoTitle = new Label("Información");
         infoTitle.setFont(new Font("Arial", 16));
@@ -144,14 +152,15 @@ public class JavaFX3DSimulationView {
         Label instructions = new Label(
             "- Arrastra el ratón para rotar la vista\n" +
             "- Usa la rueda para hacer zoom\n" +
+            "- Haz clic en un planeta o luna para ver su información\n" +
             "- Teclas WASD para movimiento\n" +
             "- R para reiniciar la vista"
         );
         instructions.setStyle("-fx-text-fill: #BBBBBB; -fx-wrap-text: true;");
         
-        infoPanel.getChildren().addAll(infoTitle, instructions);
+        leftPanel.getChildren().addAll(infoTitle, instructions);
         
-        return infoPanel;
+        return leftPanel;
     }
     
     /**
@@ -189,22 +198,37 @@ public class JavaFX3DSimulationView {
     private void setupEventHandlers() {
         // Manejar eventos de arrastre para rotación de la escena
         subScene3D.setOnMousePressed(event -> {
+            System.out.println("Mouse presionado en la escena 3D");
             anchorX = event.getSceneX();
             anchorY = event.getSceneY();
             anchorAngleX = rotateX.getAngle();
             anchorAngleY = rotateY.getAngle();
+            
+            // Marcar el evento como no consumido para que pueda llegar a los planetas
+            event.consume();
         });
         
         subScene3D.setOnMouseDragged(event -> {
-            // Calcular la rotación basada en el movimiento del ratón
-            rotateX.setAngle(anchorAngleX - (anchorY - event.getSceneY()) * 0.25);
-            rotateY.setAngle(anchorAngleY + (anchorX - event.getSceneX()) * 0.25);
+            // Solo rotar si el arrastre es significativo (más de 3 píxeles)
+            double deltaX = Math.abs(event.getSceneX() - anchorX);
+            double deltaY = Math.abs(event.getSceneY() - anchorY);
+            
+            if (deltaX > 3 || deltaY > 3) {
+                System.out.println("Rotando escena con arrastre");
+                // Calcular la rotación basada en el movimiento del ratón
+                rotateX.setAngle(anchorAngleX - (anchorY - event.getSceneY()) * 0.25);
+                rotateY.setAngle(anchorAngleY + (anchorX - event.getSceneX()) * 0.25);
+                
+                // Consumir el evento para indicar que fue manejado como un arrastre
+                event.consume();
+            }
         });
         
         // Configurar zoom con la rueda del ratón
         subScene3D.setOnScroll(this::handleScroll);
         
-        // Configurar eventos de los botones cuando se establezca el controlador
+        // No configuramos aquí los clicks para seleccionar planetas
+        // Eso lo haremos en el controlador cuando se agreguen los planetas
     }
     
     /**
@@ -333,6 +357,14 @@ public class JavaFX3DSimulationView {
     }
     
     /**
+     * Obtiene el panel de información de cuerpos celestes.
+     * @return El panel de información
+     */
+    public CelestialBodyInfoPanel getInfoPanel() {
+        return infoPanel;
+    }
+    
+    /**
      * Actualiza el tamaño de la subescena 3D cuando cambia el tamaño de la ventana.
      */
     public void updateSubSceneSize() {
@@ -353,10 +385,20 @@ public class JavaFX3DSimulationView {
         borderPane.setTop(toolbar);
 
         // Panel de información compacto a la izquierda
-        VBox infoPanel = createInfoPanel();
-        infoPanel.setStyle("-fx-padding: 5; -fx-background-color: rgba(34, 34, 34, 0.7);");
-        infoPanel.setPrefWidth(150);
-        borderPane.setLeft(infoPanel);
+        VBox leftPanel = createLeftPanel();
+        leftPanel.setStyle("-fx-padding: 5; -fx-background-color: rgba(34, 34, 34, 0.7);");
+        leftPanel.setPrefWidth(150);
+        borderPane.setLeft(leftPanel);
+        
+        // Asegurar que el panel de información esté visible cuando sea necesario
+        if (infoPanel != null) {
+            // Añadir márgenes al panel y hacer que tenga un tamaño adecuado
+            BorderPane.setMargin(infoPanel, new Insets(10, 10, 10, 0));
+            infoPanel.setPrefWidth(250);
+            
+            // Dejamos que el panel de información se muestre solo cuando se seleccione un cuerpo celeste
+            infoPanel.setVisible(false);
+        }
 
         // Asegurar que la subescena 3D ocupe el espacio restante
         updateSubSceneSize();
